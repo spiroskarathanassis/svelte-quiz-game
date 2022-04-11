@@ -9,6 +9,7 @@
 
 	// definitions
 	let buttons;
+	let isSettingNextQuestion = false;
 	let totalQuestions = 0;
 	let previousAnswerIndex = '';
 	let activeAnswers = []; //all answers indexing by loop 1-4
@@ -37,7 +38,7 @@
 	};
 
 	// computed
-	$: isNextBtnDisabled = !activeAnswers.includes(true);
+	$: isNextBtnDisabled = !activeAnswers.includes(true) || isSettingNextQuestion;
 
 	const emit = createEventDispatcher();
 
@@ -57,14 +58,21 @@
 		};
 	};
 
-	const setNextQuestion = () => {
+	const setNextQuestion = async () => {
+		isSettingNextQuestion = true;
+
 		const isCorrect = compareAnswers();
 		addPoints(isCorrect);
 		printMessage(isCorrect);
 		displayCorrectAnswers(isCorrect);
 
 		const isFinished = question.currentIndex >= totalQuestions - 1;
-		stopTime(isFinished);
+		await stopTime(isFinished);
+
+		isSettingNextQuestion = false;
+		// Show points
+		console.clear();
+		console.table(points);
 	};
 
 	const addPoints = (isCorrect) => {
@@ -72,9 +80,6 @@
 			points.player += question.points;
 		}
 		points.totalGame += question.points;
-
-		console.clear();
-		console.table(points);
 	};
 
 	const printMessage = (isCorrect) => {
@@ -100,16 +105,21 @@
 	};
 
 	const stopTime = (isFinished) => {
-		setTimeout(() => {
-			uncheckAnswers();
+		return new Promise((resolve) => {
+			const timer = setTimeout(() => {
+				uncheckAnswers();
 
-			if (!isFinished) {
-				++question.currentIndex;
-				displayQuestion();
-			} else {
-				prepareResults();
-			}
-		}, QUESTION_TIMEOUT);
+				if (!isFinished) {
+					++question.currentIndex;
+					displayQuestion();
+				} else {
+					prepareResults();
+				}
+
+				resolve();
+				clearTimeout(timer);
+			}, QUESTION_TIMEOUT);
+		});
 	};
 
 	const toggleAnswers = (e) => {
@@ -120,14 +130,12 @@
 			if (isSelected === false) return;
 
 			if (previousAnswerIndex) {
-				buttons.children[previousAnswerIndex].setAttribute('data-selected', !isSelected);
 				activeAnswers[previousAnswerIndex] = !isSelected;
 			}
 
 			previousAnswerIndex = e.target.value;
 		}
 
-		e.target.setAttribute('data-selected', isSelected);
 		activeAnswers[e.target.value] = isSelected;
 	};
 
@@ -216,7 +224,7 @@
 			<button
 				value={index}
 				data-id={question.type === 'truefalse' ? !index : ans.a_id}
-				data-selected={answer.isCorrect}
+				data-selected={activeAnswers[index] === true}
 				on:click={toggleAnswers}
 				class="answer-btn"
 				class:correct={answer.classNames[index] && answer.isCorrect}
